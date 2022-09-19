@@ -2,11 +2,14 @@
 #define cfl 0.5
 #define NG 1
 #define HST 1
-#define N 1024
+#define nx1 128
+#define nx2 64
+#define nx3 32
 #define MB 16
 #define NHYDRO 5
 #define GAM 1.4
-#define nstep 10000                                                                                                     
+#define nstep 1000000
+
 
 #define Real float 
 //const int NUMCONS = 5;

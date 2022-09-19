@@ -115,62 +115,78 @@ __global__ void kernel_copy(Real *in, Real *out){
   }
 }
 
+
+void initial(Real *hydro, int ngrid){
+  for(int k = 0; k < nx3 + 2*NG; ++k){
+    x3c[k] = (k-NG)*0.1+0.05;
+    x3f[k] = (k-NG)*0.1;
+    for(int j = 0; j < nx2 + 2*NG; ++j){
+      x2c[j] = (j-NG)*0.1+0.05;
+      x2f[j] = (j-NG)*0.1;
+      int loczy = j*(nx1+2*NG)+k*(nx2+2*NG)*(nx1+2*NG);
+      for(int i = 0; i < nx1 + 2*NG; ++i){
+      //hydro[NHYDRO*(N+2*NG)+i] = (i-NG)*0.1+0.05;
+        x1c[i] = (i-NG)*0.1+0.05;
+        x1f[i] = (i-NG)*0.1;
+        if ( (i-NG)*0.1 < 50.){
+            
+	    hydro[loczy+i]=1.;
+            hydro[IEN*ngrid+loczy+i] = 1.0;
+	    hydro[IM1*ngrid+loczy+i] = 0.0;
+	    hydro[IM2*ngrid+loczy+i] = 0.0;
+	    hydro[IM3*ngrid+loczy+i] = 0.0;
+         }
+         else{
+	    hydro[i]=0.125;
+            hydro[IEN*ngrid+loczy+i] = 0.1;
+	    hydro[IM1*ngrid+loczy+i] = 0.0;
+	    hydro[IM2*ngrid+loczy+i] = 0.0;
+	    hydro[IM3*ngrid+loczy+i] = 0.0;
+         }
+       }
+     }
+  }
+}
 int main(){
 
   Real *hydro, *hydro1, *x1c, *x1f;
-  int nBytes = (N+2*NG)*(NHYDRO)*sizeof(Real);
-  int nBytesxc = (N+2*NG)*sizeof(Real);
-  int nBytesxf = (N+2*NG+1)*sizeof(Real);
+  int ngrid = (nx3+2*NG)*(nx2+2*NG)*(nx1+2*NG);
+  int nBytes = (nx3+2*NG)*(nx2+2*NG)*(nx1+2*NG)*(NHYDRO)*sizeof(Real);
+  int nBytesx1c = (nx1+2*NG)*sizeof(Real);
+  int nBytesx1f = (nx1+2*NG+1)*sizeof(Real);
+  int nBytesx2c = (nx2+2*NG)*sizeof(Real);
+  int nBytesx2f = (nx2+2*NG+1)*sizeof(Real);
+  int nBytesx3c = (nx3+2*NG)*sizeof(Real);
+  int nBytesx3f = (nx3+2*NG+1)*sizeof(Real);
   Real dt=0.03;
 
   cudaMallocManaged(&hydro,nBytes);
   cudaMallocManaged(&hydro1,nBytes);
-  cudaMallocManaged(&x1c,nBytesxc);
-  cudaMallocManaged(&x1f,nBytesxf);
+  cudaMallocManaged(&x1c,nBytesx1c);
+  cudaMallocManaged(&x1f,nBytesx1f);
+  cudaMallocManaged(&x2c,nBytesx2c);
+  cudaMallocManaged(&x2f,nBytesx2f);
+  cudaMallocManaged(&x3c,nBytesx3c);
+  cudaMallocManaged(&x3f,nBytesx3f);
 
 
   //initialize hydro
-  for(int i = 0; i < N + 2*NG;++i){
-
-    //hydro[NHYDRO*(N+2*NG)+i] = (i-NG)*0.1+0.05;
-    x1c[i] = (i-NG)*0.1+0.05;
-    x1f[i] = (i-NG)*0.1;
-    if ( (i-NG)*0.1 < 50.){
-	    hydro[i]=1.;
-            hydro[IEN*(N+2*NG)+i] = 1.0;
-	    hydro[IM1*(N+2*NG)+i] = 0.0;
-	    hydro[IM2*(N+2*NG)+i] = 0.0;
-	    hydro[IM3*(N+2*NG)+i] = 0.0;
-    }
-    else{
-	    hydro[i]=0.125;
-            hydro[IEN*(N+2*NG)+i] = 0.1;
-	    hydro[IM1*(N+2*NG)+i] = 0.0;
-	    hydro[IM2*(N+2*NG)+i] = 0.0;
-	    hydro[IM3*(N+2*NG)+i] = 0.0;
-    }
-
-    //hydro1[NHYDRO*(N+2*NG)+i] = (i-NG)*0.1;
-    hydro1[1*(N+2*NG)+i] = 1.;
-    if ( (i-NG)*0.1 < 5.) hydro1[i]=0.;
-    else if ( (i-NG)*0.1 < 10. && (i-NG)*0.1 > 5.) hydro1[i]= 1.;
-    else hydro1[i]=0.;
-
-  }
+  initial(hydro,ngrid);
+  initial(hydro1,ngrid);
 
 
-  x1f[N+2*NG] = (N+NG)*0.1;
   FILE *fp;
   fp = fopen("hydro.bin","wb");
   fwrite(hydro,sizeof(Real),nBytes,fp);
   fclose(fp);
 
   for (int step=0; step< nstep;step++){
-    kernel<<<N/MB,MB>>>(hydro, hydro1, x1c, x1f, dt);
+    kernel<<<nx3*nx2*nx1/MB,MB>>>(hydro, hydro1, x1c, x1f, dt);
     cudaDeviceSynchronize();
     openbc( hydro, hydro+(IM1*(N+2*NG)),hydro+(IEN*(N+2*NG)));         
     kernel_copy<<<N/MB,MB>>>(hydro1, hydro);
     cudaDeviceSynchronize();
+    if ( step % 1000 == 0 ) std::cout<<"step = "<<step<<std::endl;
   }
 
 //  cudaDeviceSynchronize();
